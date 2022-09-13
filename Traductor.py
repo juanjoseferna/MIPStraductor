@@ -4,6 +4,9 @@ from tkinter import filedialog
 from tkinter import messagebox
 import re
 
+
+etiquetas = {}
+
 registros = {"$zero": "00000", 
              "$at":   "00001", 
              "$v0":   "00010", 
@@ -113,6 +116,13 @@ opcodes = { "add": [0, 32],
             "div": [0, 26], 
             "divu": [0, 27]}
 
+def esEtiqueta(param):
+    try:
+        eval(param)
+        return False
+    except:
+        return True
+
 def regToBin(registro):
     return registros[registro]
 
@@ -138,14 +148,18 @@ def tipoR(frase):
     traduccion = {"opcode":"000000", "rs":"00000","rt":"00000","rd":"00000","shamt":"00000","func":"000000"}
     parametros = frase.split()
     for i in range(len(parametros)): 
-        if i == 1 and "rd" in instrucciones[parametros[0]]:
-            traduccion["rd"] = str(regToBin(parametros[i]))
-        elif i == 2 and "rt" in instrucciones[parametros[0]]:
-            traduccion["rt"] = str(regToBin(parametros[i]))
-        elif i == 3 and "rs" in instrucciones[parametros[0]]:
-            traduccion["rs"] = str(regToBin(parametros[i]))
-        elif i == 3 and "shamt" in instrucciones[parametros[0]]:
-            traduccion["shamt"] = str(shamtToBin(parametros[i]))
+        if "rd" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("rd"):
+                traduccion["rd"] = str(regToBin(parametros[i]))
+        if "rt" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("rt"):
+                traduccion["rt"] = str(regToBin(parametros[i]))
+        if "rs" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("rs"):
+                traduccion["rs"] = str(regToBin(parametros[i]))
+        if "shamt" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("shamt"):
+                traduccion["shamt"] = str(shamtToBin(parametros[i]))
     traduccion["func"] = str(opcodeToBin(opcodes[parametros[0]][1]))
     return (traduccion["opcode"] + traduccion["rs"] + traduccion["rt"] + traduccion["rd"] + traduccion["shamt"] + traduccion["func"])
 
@@ -158,18 +172,32 @@ def immToBin (imm):
         res = imm
     return str(res)
 
+def indexSup (lista, elemento):
+    try:
+        res = lista.index(elemento)
+        return res
+    except:
+        return False
+
 def tipoI(frase):
+    global PCactual
     traduccion = {"opcode":"000000", "rs":"00000","rt":"00000", "imm":"0000000000000000"}
     parametros = frase.split()
     for i in range(len(parametros)):
         if i == 0:
             traduccion["opcode"] = str(opcodeToBin(opcodes[parametros[i]][0]))
-        elif i == 1 and "rt" in instrucciones[parametros[0]]:
-            traduccion["rt"] = str(regToBin(parametros[i]))
-        elif i == 2 and "rs" in instrucciones[parametros[0]]:
-            traduccion["rs"] = str(regToBin(parametros[i]))
-        elif i == 3 and "imm" in instrucciones[parametros[0]]:
-            traduccion["imm"] = str(immToBin(parametros[i]))
+        if "rt" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("rt"):
+                traduccion["rt"] = str(regToBin(parametros[i]))
+        if "rs" in instrucciones[parametros[0]]:
+            if i == instrucciones[parametros[0]].index("rs"):
+                traduccion["rs"] = str(regToBin(parametros[i]))
+        if i == instrucciones[parametros[0]].index("imm"):
+            if esEtiqueta(parametros[i]):
+                ope = int((etiquetas[parametros[i]] - PCactual - 4)/4)
+                traduccion["imm"] = str(immToBin(hex(ope)))
+            else:
+                traduccion["imm"] = str(immToBin(parametros[i]))
     return (traduccion["opcode"] + traduccion["rs"] + traduccion["rt"] + traduccion["imm"])
 
 def immToBinEsp(imm):
@@ -189,30 +217,66 @@ def tipoJ(frase):
         if i == 0:
             traduccion["opcode"] = str(opcodeToBin(opcodes[parametros[i]][0]))
         if i == 1 and "imm" in instrucciones[parametros[0]]:
-            traduccion["imm"] = str(immToBinEsp(parametros[i]))
+            if esEtiqueta(parametros[i]):
+                traduccion["imm"] = str(immToBinEsp(hex(etiquetas[parametros[i]])))
+            else:
+                traduccion["imm"] = str(immToBinEsp(parametros[i]))
+    #print(traduccion["opcode"]+traduccion["imm"])
     return (traduccion["opcode"]+traduccion["imm"])
 
 def filtro(parame):
+    global PCactual, etiquetas
     frase = parame.split()
-    if instrucciones[frase[0]][0] == "R":
+    if instrucciones.get(frase[0],[0])[0] == "R":
+        PCactual = PCactual + 4
         return tipoR(parame)
-    elif instrucciones[frase[0]][0] == "I":
+    elif instrucciones.get(frase[0],[0])[0] == "I":
+        PCactual = PCactual + 4
         return tipoI(parame)
-    elif instrucciones[frase[0]][0] == "J":
+    elif instrucciones.get(frase[0],[0])[0] == "J":
+        PCactual = PCactual + 4
         return tipoJ(parame)
+    else:
+        return parame
 
 def informacion():
     messagebox.showinfo(message= "Creado por: \n Juan José Fernández \n Esteban Llanos \n Jesus Valencia", title= "Información")
 
+def calcularEtiqueta(parame):
+    global PCactual, etiquetas
+    parame = parame.replace(':','')
+    #print("Se agrego", parame, "a etiquetas ")
+    etiquetas[parame] = PCactual
+
+def filtrarEtiquetas(parame):
+    global PCactual, etiquetas
+    #print(hex(PCactual), '.', parame)
+    frase = parame.split()
+    if instrucciones.get(frase[0],[0])[0] == "R":
+        PCactual = PCactual + 4
+    elif instrucciones.get(frase[0],[0])[0] == "I":
+        PCactual = PCactual + 4
+    elif instrucciones.get(frase[0],[0])[0] == "J":
+        PCactual = PCactual + 4
+    elif parame.endswith(':'):
+        return calcularEtiqueta(parame)
+
 def botonTraducir():
+    global PCactual,etiquetas
     salida.delete("1.0", "end")
     entrr = str(entrada.get("1.0", "end"))
+    PCactual = 0x400000
     lista = re.split(r'\n',entrr)
     final = ''
-    lista.pop()
+    for i in lista:
+        if i != '':
+            filtrarEtiquetas(i)
+    PCactual = 0x400000
+    #print(etiquetas)
     for i in lista: 
-        final += filtro(i)
-        final += "\n"
+        if i != '':
+            final += filtro(i)
+            final += "\n"
     salida.insert(INSERT,final)
 
 def cargarArchivo():
@@ -226,6 +290,8 @@ def cargarArchivo():
 
 def salir():
     sys.exit()
+
+PCactual = 0
 
 ventana = Tk() #Se crea la interfaz grafica con TKinter
 ventana.geometry("1280x720+130+50") #Se definen las dimensiones de la ventana
